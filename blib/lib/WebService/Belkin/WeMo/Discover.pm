@@ -37,8 +37,8 @@ sub search {
 	my $self = shift;
 
 	my $upnp    = Net::UPnP::ControlPoint->new();
-	my @devices = $upnp->search( st => 'upnp:rootdevice', mx => 10 );
-	#print Dumper @devices;
+	my @devices = $upnp->search( st => 'upnp:rootdevice', mx => 3 );
+
 	my $discovered;
 
 	foreach my $device (@devices) {
@@ -49,24 +49,27 @@ sub search {
 			my $type;
 			if ($device_type =~/controllee/) {
 				$type = "switch";
+				print("Me encontre un Switxh!\n");
 			} elsif ($device_type =~/sensor/) {
 				$type = "sensor";
 			} elsif ($device_type =~/bridge/){
+				print("Me encontre un bridge\n");
 				$type = "bridge";
 			}
 			else {
 				$type = "unknown";
 			}
 			
-			my ( $ip, $port ) = $device->getssdp() =~ /LOCATION: http:\/\/(.*):(.*)\/setup.xml/;	
+			my ( $ip, $port ) =
+			  $device->getssdp() =~ /LOCATION: http:\/\/(.*):(.*)\/setup.xml/;
 			$discovered->{$ip} = {
 				ip     => $ip,
 				port   => $port,
 				type   => $type,
 				name   => $device->getfriendlyname(),
-				device => $device,
-				udn    => $device->getudn()
+				device => $device
 			};
+
 		}
 	}
 	$self->{_discovered} = $discovered;
