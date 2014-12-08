@@ -16,9 +16,14 @@ my $wemoDiscover = WebService::Belkin::WeMo::Discover->new();
 # $Net::UPnP::DEBUG = 1;
 my $discovered = $wemoDiscover->search();
 
-$wemoDiscover->save("/etc/belkin.db");
+#$wemoDiscover->save("/etc/belkin.db");
 
 
 foreach my $ip (keys %{$discovered}) {
 	print "Found $ip\n";
+	print "Friendly Name = $discovered->{$ip}->{'name'}\n";
+	print "Type = $discovered->{$ip}->{'type'}\n";
+	print "Type = $discovered->{$ip}->{'udn'}\n";
 }
+
+#print Dumper $discovered;
