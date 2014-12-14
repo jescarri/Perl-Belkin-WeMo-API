@@ -30,50 +30,59 @@ sub new {
 	$self->{'_ip'}   = $params{'ip'};
 	$self->{'_name'} = $params{'name'};
 	$self->{'_db'}   = $params{'db'};
-
-	my $wemoDiscover = WebService::Belkin::WeMo::Discover->new();
+	$self->{'_scan'}   = $params{'scan'};
+	if (defined $params{'deviceid'}) {
+		$self->{'_deviceid'} = $params{'deviceid'};
+	}
 	my $discovered;
+	my $wemoDiscover = WebService::Belkin::WeMo::Discover->new();
 	if ( defined $params{'db'} ) {
-		$discovered = $wemoDiscover->load($params{'db'});
-	}
-	else {
-		$discovered = $wemoDiscover->search();
-	}
-
-	if ( defined( $params{'ip'} ) ) {
-		if ( !defined $discovered->{ $self->{'_ip'} } ) {
-			croak "IP not found - try running another discovery search!";
+			$discovered = $wemoDiscover->load($params{'db'});
 		}
-
+	if ( defined( $params{'ip'} ) ) {
+			if ( !defined $discovered->{ $self->{'_ip'} } ) {
+				croak "IP not found - on cache, Try to refresh it!";
+				return undef;
+		}
 		$self->{_device} = $discovered->{ $self->{'_ip'} }->{'device'};
 		$self->{_type} = $discovered->{ $self->{'_ip'} }->{'type'};
-		
 	}
-
-	if ( defined( $params{'name'} ) ) {
-		my $found = 0;
-
-		foreach ( keys( %{$discovered} ) ) {
-
-			if ( $discovered->{$_}->{'name'} eq $params{'name'} ) {
-				$found = 1;
-				$self->{_device} = $discovered->{$_}->{'device'};
-				last;
+	#Decouple the SCAN from the Device, to make if possible to run the agent from a different network.
+	#If scan is 1 then the agent is running on the same network than the wemo Devices.
+	if ( $self->{'_scan'} eq 1) {
+		$discovered = $wemoDiscover->search();
+		if ( defined( $params{'ip'} ) ) {
+			if ( !defined $discovered->{ $self->{'_ip'} } ) {
+				croak "IP not found - try running another discovery search!";
 			}
-
+	
+			$self->{_device} = $discovered->{ $self->{'_ip'} }->{'device'};
+			$self->{_type} = $discovered->{ $self->{'_ip'} }->{'type'};
 		}
-
-		if ( !$found ) {
-			croak "Name not found - try running another discovery search!";
+		if ( defined( $params{'name'} ) ) {
+			my $found = 0;
+			foreach ( keys( %{$discovered} ) ) {
+				if ( $discovered->{$_}->{'name'} eq $params{'name'} ) {
+					$found = 1;
+					$self->{_device} = $discovered->{$_}->{'device'};
+					last;
+				}
+			}
+			if ( !$found ) {
+				croak "Name not found - try running another discovery search!";
+			}	
 		}
-
 	}
-
-	# Load service - only basic is here for now, others will be supported later
+	
+	# Load service - only basic/bridge is here for now, others will be supported later
 	foreach my $service ( $self->{_device}->getservicelist() ) {
 
 		if ( $service->getservicetype() =~ /urn:Belkin:service:basicevent:1/ ) {
 			$self->{_basicService} = $service;
+		}
+		#Add service brige.
+		if ( $service->getservicetype() =~ /urn:Belkin:service:bridge:1/ ) {
+			$self->{_bridge} = $service;
 		}
 	}
 
@@ -95,7 +104,18 @@ sub getType() {
     
     
 }
-
+sub getUDN() {
+    
+    my $self = shift;
+    
+    if (defined($self->{_udn})) {
+        return $self->{_udn};
+    } else {
+        return "undefined";
+    }
+    
+    
+}
 sub getFriendlyName() {
 
 	my $self = shift;
@@ -119,6 +139,50 @@ sub isSwitchOn() {
 		return $resp->getargumentlist()->{'BinaryState'};
 	}
 	else {
+		croak "Got status code " . $resp->getstatuscode() . "!\n";
+	}
+
+}
+
+sub bulbOn() {
+
+	my $self = shift;
+	
+	if ($self->getType ne "bridge") {
+		warn "Method only supported for switches, not sensors.\n";
+		return;
+	}
+	#The request needs an XML formated request, for now it is a copy/paste from a packet capture.
+	my $resp = $self->{_bridge}->postaction("SetDeviceStatus",{ DeviceStatusList=> "&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&lt;DeviceStatus&gt;&lt;IsGroupAction&gt;NO&lt;/IsGroupAction&gt;&lt;DeviceID available=&quot;YES&quot;&gt;$self->{'_deviceid'}&lt;/DeviceID&gt;&lt;CapabilityID&gt;10006&lt;/CapabilityID&gt;&lt;CapabilityValue&gt;1&lt;/CapabilityValue&gt;&lt;/DeviceStatus&gt;"				
+						
+	});
+	if ( $resp->getstatuscode() == 200 ) {
+		return $resp->getargumentlist()->{'BinaryState'};
+	}
+	else {
+		print Dumper $resp;
+		croak "Got status code " . $resp->getstatuscode() . "!\n";
+	}
+
+}
+
+sub bulbOff() {
+
+	my $self = shift;
+	
+	if ($self->getType ne "bridge") {
+		warn "Method only supported for switches, not sensors.\n";
+		return;
+	}
+	#The request needs an XML formated request, for now it is a copy/paste from a packet capture.
+	my $resp = $self->{_bridge}->postaction("SetDeviceStatus",{ DeviceStatusList=> "&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&lt;DeviceStatus&gt;&lt;IsGroupAction&gt;NO&lt;/IsGroupAction&gt;&lt;DeviceID available=&quot;YES&quot;&gt;$self->{'_deviceid'}&lt;/DeviceID&gt;&lt;CapabilityID&gt;10006&lt;/CapabilityID&gt;&lt;CapabilityValue&gt;0&lt;/CapabilityValue&gt;&lt;/DeviceStatus&gt;"				
+						
+	});
+	if ( $resp->getstatuscode() == 200 ) {
+		return $resp->getargumentlist()->{'BinaryState'};
+	}
+	else {
+		print Dumper $resp;
 		croak "Got status code " . $resp->getstatuscode() . "!\n";
 	}
 
@@ -175,8 +239,7 @@ sub on() {
 	}
 
 	my $resp =
-	  $self->{_basicService}
-	  ->postaction( "SetBinaryState", { BinaryState => 1 } );
+	  $self->{_basicService}->postaction( "SetBinaryState", { BinaryState => 1 } );
 	if ( $resp->getstatuscode() == 200 ) {
 
 		# Not this will be Error if the switch is already on
@@ -198,8 +261,7 @@ sub off() {
 	}
 
 	my $resp =
-	  $self->{_basicService}
-	  ->postaction( "SetBinaryState", { BinaryState => 0 } );
+	  $self->{_basicService}->postaction( "SetBinaryState", { BinaryState => 0 } );
 	if ( $resp->getstatuscode() == 200 ) {
 
 		# Not this will be Error if the switch is already off
@@ -253,7 +315,8 @@ This library allows basic control of the switches (turning on/off and getting de
     * on - Turn switch on
     * off - Turn switch off
     * toggle - Toggle switch on/off
-
+    * bulbOff - Turn off a light bulb via a bridge
+    * bulbOn - Turn on a light bulb via a bridge
 
 
 =head1 AUTHOR

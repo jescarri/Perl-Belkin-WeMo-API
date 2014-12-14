@@ -5,9 +5,10 @@
 # Author:       Eric Blue - ericblue76@gmail.com
 # Project:      Belkin Wemo API
 # Url:          http://eric-blue.com/belkin-wemo-api/
-#
+
 
 # ABSTRACT: Uses UPNP to control Belkin Wemo Switches
+# Added support for WeMo Bridge and Light Bulbs.
 
 package WebService::Belkin::WeMo::Discover;
 
@@ -35,7 +36,6 @@ sub new {
 sub search {
 
 	my $self = shift;
-
 	my $upnp    = Net::UPnP::ControlPoint->new();
 	my @devices = $upnp->search( st => 'upnp:rootdevice', mx => 10 );
 	#print Dumper @devices;
